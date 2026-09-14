@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }} · Money Flow & Sector Rotation</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=api14">
+</head>
+<body data-page="home">
+  <div id="page-loader" class="page-loader" aria-live="polite" aria-busy="true">
+    <div class="page-loader-inner">
+      <span class="page-loader-spin" aria-hidden="true"></span>
+      <p>Loading market data</p>
+    </div>
+  </div>
+  <header class="top">
+    <div>
+      <p class="kicker">{{ app_name }} · Indian cash market · official sources</p>
+      <h1>{{ app_tagline }}</h1>
+    </div>
+    <button id="update-btn" type="button">🔄 Update Market Data</button>
+  </header>
+
+  <div id="progress" class="progress hidden"></div>
+
+  <div id="empty" class="empty hidden">
+    <p>No market data stored yet. Run <code>python scrape.py</code> or click <strong>Update Market Data</strong>.</p>
+  </div>
+
+  <div id="board" class="hidden">
+    <div class="sticky-bar">
+      <nav class="months" id="months" aria-label="Month"></nav>
+      <nav class="section-tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" data-target="market" aria-selected="true" class="on">Market</button>
+        <button type="button" role="tab" data-target="charts" aria-selected="false">Charts</button>
+        <button type="button" role="tab" data-target="sectors" aria-selected="false">Sectors</button>
+        <button type="button" role="tab" data-target="notes" aria-selected="false" id="notes-tab" class="hidden">Notes</button>
+      </nav>
+    </div>
+
+    <section class="hero tab-panel" id="market" data-api="market">
+      <div class="panel-body"></div>
+    </section>
+
+    <section class="chart-section tab-panel" id="charts" data-api="chart">
+      <div class="panel-body hidden">
+        <h3>Sector flow over time</h3>
+        <p class="hint">Monthly FPI is NSDL sector equity net (₹ Cr). Weekly is the sector index return from week-end closes — official weekly sector FPI is not published. Click a name to show or hide a line.</p>
+        <div class="sort-bar" id="chart-mode">
+          <span>View</span>
+          <button type="button" data-view="fpi" class="on">Monthly FPI</button>
+          <button type="button" data-view="score">Monthly score</button>
+          <button type="button" data-view="weekly">Weekly index</button>
+          <button type="button" data-action="all">All sectors</button>
+          <button type="button" data-action="none">Hide all</button>
+        </div>
+        <div class="chart-stack">
+          <div class="chart-card">
+            <div class="chart-canvas-wrap">
+              <canvas id="flow-chart" height="460"></canvas>
+              <div id="chart-tooltip" class="chart-tooltip hidden"></div>
+            </div>
+            <div id="chart-legend" class="chart-legend"></div>
+          </div>
+          <div class="chart-card" id="split-card">
+            <h4 id="split-title">FPI split</h4>
+            <div class="chart-canvas-wrap bar">
+              <canvas id="split-chart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sectors" class="tab-panel" data-api="sectors">
+      <div class="panel-body"></div>
+    </section>
+
+    <section class="errors tab-panel hidden" id="notes">
+      <h3>Last update notes</h3>
+      <ul id="notes-list"></ul>
+    </section>
+  </div>
+
+  <footer>
+    {{ app_name }} · Pages read Postgres APIs only. Scraping is a separate job.
+    <span id="last-updated"></span>
+  </footer>
+  <div id="flow-daily-modal" class="modal hidden" hidden role="dialog" aria-modal="true" aria-labelledby="flow-daily-title">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="flow-daily-title">Daily</h3>
+        <button type="button" class="flow-daily-close" aria-label="Close daily table">Close</button>
+      </div>
+      <div id="flow-daily-body" class="modal-body"></div>
+    </div>
+  </div>
+  <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=api14"></script>
+</body>
+</html>

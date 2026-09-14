@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+*.db
+.DS_Store
+.amfi.xls
+.bhav.zip
+.env

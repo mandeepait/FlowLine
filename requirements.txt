@@ -1,0 +1,9 @@
+flask>=3.0
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.0
+xlrd==1.2.0
+pypdf>=5.0
+legacy-cgi>=1.0
+psycopg[binary]>=3.2
+python-dotenv>=1.0
