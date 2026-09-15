@@ -116,6 +116,31 @@ def _named_series(names: list[str], mapping: dict, keys: list[str]) -> list[dict
     return [{"name": name, "values": [mapping.get((k, name)) for k in keys]} for name in names]
 
 
+def _months_through(months: list[str], selected: str) -> list[str]:
+    if selected in months:
+        return months[: months.index(selected) + 1]
+    return list(months)
+
+
+def _inst_net_map(conn, months: list[str], category: str, source: str | None = None) -> dict[str, float]:
+    if not months:
+        return {}
+    q = ",".join("?" for _ in months)
+    if source:
+        sql = f"""
+            SELECT month, net_flow FROM institutional_flows
+            WHERE category=? AND source=? AND month IN ({q})
+        """
+        args = [category, source, *months]
+    else:
+        sql = f"""
+            SELECT month, net_flow FROM institutional_flows
+            WHERE category=? AND month IN ({q})
+        """
+        args = [category, *months]
+    return {row["month"]: row["net_flow"] for row in fetchall(conn, sql, args)}
+
+
 def weekly_sector_series(conn) -> dict:
     start = f"{START_MONTH}-01"
     indexes = [s["index"] for s in SECTORS]
@@ -190,6 +215,9 @@ def build_flow_chart(conn, months: list[str], selected: str) -> dict:
     score_map = {(row["month"], row["sector"]): row["score"] for row in score_rows}
     have = {row["sector"] for row in score_rows}
     score_names = [s["name"] for s in SECTORS if s["name"] in have]
+    fpi_m = _inst_net_map(conn, months, "FPI")
+    dii_m = _inst_net_map(conn, months, "DII", "AMFI")
+    fii_m = _inst_net_map(conn, months, "FII_CASH")
 
     return {
         "selected": selected,
@@ -198,6 +226,11 @@ def build_flow_chart(conn, months: list[str], selected: str) -> dict:
             "keys": months,
             "fpi": _named_series(fpi_names, fpi_map, months),
             "score": _named_series(score_names, score_map, months),
+        },
+        "market": {
+            "fpi": [fpi_m.get(m) for m in months],
+            "dii": [dii_m.get(m) for m in months],
+            "fii_cash": [fii_m.get(m) for m in months],
         },
         "weekly": weekly_sector_series(conn),
     }
@@ -235,18 +268,10 @@ def market_payload(selected: str | None = None) -> dict:
         (month,),
     )
     mf = fetchone(conn, "SELECT * FROM mutual_fund_flows WHERE month=?", (month,))
-    trail_months = _month_window(months, month, 4)
-    dii_map = {
-        row["month"]: row["net_flow"]
-        for row in fetchall(
-            conn,
-            f"""
-            SELECT month, net_flow FROM institutional_flows
-            WHERE category='DII' AND source='AMFI' AND month IN ({",".join("?" for _ in trail_months)})
-            """,
-            trail_months,
-        )
-    }
+    trail_months = _months_through(months, month)
+    fpi_map = _inst_net_map(conn, trail_months, "FPI")
+    dii_map = _inst_net_map(conn, trail_months, "DII", "AMFI")
+    fpi_trail = _trail(fpi_map, trail_months, compact_cr)
     dii_trail = _trail(dii_map, trail_months, compact_cr)
     scores = fetchall(
         conn,
@@ -273,6 +298,8 @@ def market_payload(selected: str | None = None) -> dict:
             "fpi_cls": tone(fpi["net_flow"] if fpi else None),
             "dii_cls": tone(dii["net_flow"] if dii else None),
             "mf_cls": tone(mf["equity_net"] if mf else None),
+            "fpi_trail_s": fpi_trail["text"],
+            "fpi_trail_steps": fpi_trail["steps"],
             "dii_trail_s": dii_trail["text"],
             "dii_trail_steps": dii_trail["steps"],
         },
@@ -330,6 +357,80 @@ def _daily_flow_rows(conn, category: str, source: str, month: str) -> dict:
     }
 
 
+def _monthly_flow_block(
+    conn, months: list[str], category: str, source: str | None, key: str, label: str, note: str
+) -> dict:
+    if not months:
+        return {
+            "key": key,
+            "label": label,
+            "note": note,
+            "period": "month",
+            "rows": [],
+            "total": {"buy_s": "—", "sell_s": "—", "net_s": "—", "net_cls": ""},
+        }
+    q = ",".join("?" for _ in months)
+    if source:
+        sql = f"""
+            SELECT month, buy_value, sell_value, net_flow
+            FROM institutional_flows
+            WHERE category=? AND source=? AND month IN ({q})
+        """
+        args = [category, source, *months]
+    else:
+        sql = f"""
+            SELECT month, buy_value, sell_value, net_flow
+            FROM institutional_flows
+            WHERE category=? AND month IN ({q})
+        """
+        args = [category, *months]
+    by = {row["month"]: row for row in fetchall(conn, sql, args)}
+    items = []
+    buy_sum = sell_sum = net_sum = 0.0
+    has_buy = has_sell = has_net = False
+    for m in reversed(months):
+        row = by.get(m)
+        buy = row["buy_value"] if row else None
+        sell = row["sell_value"] if row else None
+        net = row["net_flow"] if row else None
+        items.append(
+            {
+                "date": m,
+                "date_s": month_label(m),
+                "buy_s": _inr_amt(buy),
+                "sell_s": _inr_amt(sell),
+                "net_s": inr(net),
+                "net_cls": tone(net),
+            }
+        )
+        if buy is not None:
+            buy_sum += buy
+            has_buy = True
+        if sell is not None:
+            sell_sum += sell
+            has_sell = True
+        if net is not None:
+            net_sum += net
+            has_net = True
+    return {
+        "key": key,
+        "label": label,
+        "note": note,
+        "period": "month",
+        "rows": items,
+        "total": {
+            "buy_s": _inr_amt(buy_sum if has_buy else None),
+            "sell_s": _inr_amt(sell_sum if has_sell else None),
+            "net_s": inr(net_sum if has_net else None),
+            "net_cls": tone(net_sum if has_net else None),
+        },
+    }
+
+
+def _has_net_rows(block: dict) -> bool:
+    return any((row.get("net_s") or "—") != "—" for row in block.get("rows") or [])
+
+
 def daily_flows_payload(selected: str | None = None, kind: str = "fpi") -> dict:
     conn = connect()
     months, month = _resolve_month(conn, selected)
@@ -339,32 +440,69 @@ def daily_flows_payload(selected: str | None = None, kind: str = "fpi") -> dict:
     kind = (kind or "fpi").lower()
     if kind not in ("fpi", "dii"):
         kind = "fpi"
+    hist = _months_through(months, month)
     if kind == "dii":
-        series = [
-            {
-                "key": "dii",
-                "label": "NSE DII cash",
-                "note": "Cash-market sessions NSE has published to us. NSE only posts the latest day publicly; older rows appear after each Update. This tape is not the AMFI monthly note on the chip.",
-                **_daily_flow_rows(conn, "DII", "NSE", month),
-            }
-        ]
-        title = "Daily DII"
+        monthly = _monthly_flow_block(
+            conn,
+            hist,
+            "DII",
+            "AMFI",
+            "dii_m",
+            "AMFI DII monthly",
+            "Official month net from AMFI notes. Not published by sector.",
+        )
+        daily = {
+            "key": "dii",
+            "label": "NSE DII cash · this month",
+            "note": "Cash-market sessions NSE has published to us. NSE only posts the latest day publicly; older rows appear after each Update. This tape is not the AMFI monthly note on the chip.",
+            "period": "day",
+            **_daily_flow_rows(conn, "DII", "NSE", month),
+        }
+        series = ([monthly] if _has_net_rows(monthly) else []) + [daily]
+        title = "DII"
     else:
-        series = [
-            {
-                "key": "fpi",
-                "label": "NSDL FPI",
-                "note": "Official day-wise FPI equity buy/sell from NSDL’s monthly page.",
-                **_daily_flow_rows(conn, "FPI", "NSDL", month),
-            },
-            {
-                "key": "fii",
-                "label": "NSE FII cash",
-                "note": "NSE cash-market FII/FPI tape. Different series from NSDL FPI; not used as the monthly chip.",
-                **_daily_flow_rows(conn, "FII", "NSE", month),
-            },
-        ]
-        title = "Daily FPI / FII"
+        monthly_fpi = _monthly_flow_block(
+            conn,
+            hist,
+            "FPI",
+            None,
+            "fpi_m",
+            "NSDL FPI monthly",
+            "Official month net from NSDL. This is the figure on the FPI / FII chip.",
+        )
+        monthly_fii = _monthly_flow_block(
+            conn,
+            hist,
+            "FII_CASH",
+            None,
+            "fii_m",
+            "NSE FII cash monthly",
+            "Sum of stored NSE cash-market FII days. Different series from NSDL FPI; can be partial.",
+        )
+        series = []
+        if _has_net_rows(monthly_fpi):
+            series.append(monthly_fpi)
+        if _has_net_rows(monthly_fii):
+            series.append(monthly_fii)
+        series.extend(
+            [
+                {
+                    "key": "fpi",
+                    "label": "NSDL FPI · this month",
+                    "note": "Official day-wise FPI equity buy/sell from NSDL’s monthly page.",
+                    "period": "day",
+                    **_daily_flow_rows(conn, "FPI", "NSDL", month),
+                },
+                {
+                    "key": "fii",
+                    "label": "NSE FII cash · this month",
+                    "note": "NSE cash-market FII/FPI tape. Different series from NSDL FPI; not used as the monthly chip.",
+                    "period": "day",
+                    **_daily_flow_rows(conn, "FII", "NSE", month),
+                },
+            ]
+        )
+        title = "FPI / FII"
     conn.close()
     return {
         "empty": False,
@@ -620,6 +758,7 @@ def sector_payload(name: str, selected: str | None = None) -> dict | None:
         (month,),
     )
     trail_months = _month_window(months, month, 4)
+    hist = _months_through(months, month)
     score_trail = _trail(
         (_score_trail_map(conn, trail_months).get(name) or {}),
         trail_months,
@@ -632,6 +771,8 @@ def sector_payload(name: str, selected: str | None = None) -> dict | None:
         trail_months,
         compact_cr,
     ) if owns else {"text": "", "cls": "", "steps": []}
+    dii_map = _inst_net_map(conn, hist, "DII", "AMFI")
+    dii_trail = _trail(dii_map, hist, compact_cr)
     conn.close()
     return {
         "name": name,
@@ -645,10 +786,15 @@ def sector_payload(name: str, selected: str | None = None) -> dict | None:
         "trail_steps": score_trail["steps"],
         "fpi": fpi if owns else None,
         "fpi_s": inr(fpi["equity_net"]) if owns and fpi else "—",
+        "fpi_cls": tone(fpi["equity_net"]) if owns and fpi else "",
         "fpi_trail_s": fpi_trail["text"],
         "fpi_trail_cls": fpi_trail["cls"],
         "fpi_trail_steps": fpi_trail["steps"],
         "fpi_via": None if owns else owner,
+        "dii_s": inr(dii["net_flow"] if dii else None),
+        "dii_cls": tone(dii["net_flow"] if dii else None),
+        "dii_trail_s": dii_trail["text"],
+        "dii_trail_steps": dii_trail["steps"],
         "dii_word": dii_word(dii["net_flow"] if dii else None),
         "mf_word": dii_word(mf["equity_net"] if mf else None),
         "ret_1m": pct(score.get("ret_1m")),

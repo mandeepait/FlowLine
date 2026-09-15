@@ -247,7 +247,7 @@ body.modal-open { overflow: hidden; }
 .modal-card {
   position: relative;
   z-index: 1;
-  width: min(720px, 100%);
+  width: min(880px, 100%);
   max-height: min(86vh, 820px);
   display: flex;
   flex-direction: column;
@@ -404,6 +404,92 @@ th {
   height: 460px;
 }
 .chart-canvas-wrap.bar { height: 420px; }
+.sort-bar.compact {
+  margin: 0;
+  gap: 6px;
+}
+.sort-bar.compact button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.chart-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 0 16px;
+}
+.chart-toolbar .sort-bar,
+.chart-toolbar .chart-filter {
+  margin: 0;
+}
+.chart-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  margin: 0 0 10px;
+}
+.chart-card-head h4 { margin: 0; }
+.chart-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.chart-fs-btn {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+.chart-fs-btn:hover { border-color: var(--accent); }
+body.chart-fs-open { overflow: hidden; }
+.chart-card.is-fs {
+  position: fixed;
+  inset: 12px;
+  z-index: 85;
+  margin: 0;
+  overflow: auto;
+  padding: 20px 22px;
+  box-shadow: 0 18px 48px rgba(27, 25, 22, 0.28);
+}
+.chart-card.is-fs .flow-heat-wrap {
+  max-height: calc(100vh - 150px);
+  overflow: auto;
+}
+.chart-card.is-fs .chart-canvas-wrap,
+.chart-card.is-fs .chart-canvas-wrap.bar,
+.chart-card.is-fs .chart-canvas-wrap.market-flow {
+  height: calc(100vh - 150px) !important;
+}
+.chart-canvas-wrap.market-flow { height: 280px; }
+#market-flow-chart { width: 100% !important; height: 100% !important; }
+table.flow-heat thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+}
+table.flow-heat thead th:first-child {
+  left: 0;
+  z-index: 3;
+  text-align: left;
+}
+table.flow-heat thead th.sortable { cursor: pointer; }
+table.flow-heat thead th.sortable:hover { color: var(--accent); }
+table.flow-heat thead th.sort {
+  color: var(--accent);
+  font-weight: 700;
+}
+table.flow-heat td.sort .flow-cell {
+  box-shadow: inset 0 0 0 1px rgba(18, 60, 47, 0.35);
+}
 .chart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -489,3 +575,86 @@ footer {
   padding-top: 18px;
   font-size: 13px;
 }
+.chart-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chart-filter input {
+  flex: 1;
+  min-width: 180px;
+  max-width: 360px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  padding: 8px 12px;
+  font: inherit;
+}
+.flow-heat-wrap { overflow-x: auto; }
+table.flow-heat {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+}
+table.flow-heat th, table.flow-heat td {
+  border: 0;
+  padding: 3px 4px;
+  white-space: nowrap;
+}
+table.flow-heat thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: center;
+  padding-bottom: 8px;
+}
+table.flow-heat thead th.on, table.flow-heat td.on .flow-cell {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+table.flow-heat tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--card);
+  text-align: left;
+  font-weight: 600;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 12px;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+}
+.flow-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 28px;
+  border-radius: 3px;
+  border: 1px solid rgba(27, 25, 22, 0.08);
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+table.flow-heat.dense .flow-cell {
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+.flow-cell.tight { min-width: 22px; }
+.chart-hover { margin: 10px 0 0; min-height: 1.4em; }

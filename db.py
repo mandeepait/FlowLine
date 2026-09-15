@@ -197,6 +197,8 @@ STOCK_TABLES = [
     "sector_breadth",
     "sector_volume",
     "darvas_breakouts",
+    "stock_industry",
+    "daily_bhav",
 ]
 
 

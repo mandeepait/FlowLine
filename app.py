@@ -68,6 +68,11 @@ def api_daily_flows():
     return jsonify(daily_flows_payload(_month(), kind))
 
 
+@app.route("/api/chart")
+def api_chart():
+    return jsonify(chart_payload(_month()))
+
+
 @app.route("/api/sector/<slug>")
 def api_sector(slug):
     name = sector_by_slug(slug)

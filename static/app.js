@@ -154,13 +154,14 @@ async function loadHome() {
         <article class="chip-hit" data-flow="fpi" role="button" tabindex="0" aria-expanded="false" aria-controls="flow-daily-modal">
           <span>FPI / FII net</span>
           <strong class="${flow.fpi_cls || ""}">${flow.fpi_s || "—"}</strong>
-          <em>NSDL foreign investor flow · click for daily</em>
+          ${flow.fpi_trail_steps && flow.fpi_trail_steps.length ? `<div class="trail">${renderTrail(flow.fpi_trail_steps)}</div>` : ""}
+          <em>NSDL monthly · click for month-wise and daily</em>
         </article>
         <article class="chip-hit" data-flow="dii" role="button" tabindex="0" aria-expanded="false" aria-controls="flow-daily-modal">
           <span>DII net</span>
           <strong class="${flow.dii_cls || ""}">${flow.dii_s || "—"}</strong>
           ${flow.dii_trail_steps && flow.dii_trail_steps.length ? `<div class="trail">${renderTrail(flow.dii_trail_steps)}</div>` : ""}
-          <em>AMFI monthly note · click for daily</em>
+          <em>AMFI monthly note · click for month-wise and daily</em>
         </article>
         <article>
           <span>Mutual funds equity net</span>
@@ -271,15 +272,15 @@ async function toggleFlowDaily(kind, opener) {
   modal.hidden = false;
   modal.classList.remove("hidden");
   document.body.classList.add("modal-open");
-  if (title) title.textContent = kind === "dii" ? "Daily DII" : "Daily FPI / FII";
-  body.innerHTML = `<p class="hint">Loading daily ${kind === "dii" ? "DII" : "FPI / FII"}…</p>`;
+  if (title) title.textContent = kind === "dii" ? "DII" : "FPI / FII";
+  body.innerHTML = `<p class="hint">Loading ${kind === "dii" ? "DII" : "FPI / FII"}…</p>`;
   const closer = modal.querySelector(".flow-daily-close");
   if (closer) closer.focus();
   try {
     const data = await fetchApi(`/api/flows/daily?kind=${encodeURIComponent(kind)}`);
     renderFlowDaily(data);
   } catch (err) {
-    body.innerHTML = `<p class="hint">Could not load daily ${kind === "dii" ? "DII" : "FPI / FII"}.</p>`;
+    body.innerHTML = `<p class="hint">Could not load ${kind === "dii" ? "DII" : "FPI / FII"}.</p>`;
   }
 }
 
@@ -287,9 +288,10 @@ function renderFlowDaily(data) {
   const title = document.getElementById("flow-daily-title");
   const body = document.getElementById("flow-daily-body");
   if (!body) return;
-  if (title) title.textContent = `${data.title || "Daily"} · ${data.month_label || ""}`;
+  if (title) title.textContent = `${data.title || "Flows"} · ${data.month_label || ""}`;
   const series = (data.series || [])
     .map((s) => {
+      const month = s.period === "month";
       const rows = (s.rows || [])
         .map(
           (r) =>
@@ -304,7 +306,7 @@ function renderFlowDaily(data) {
       const tot = s.total || {};
       const foot = (s.rows || []).length
         ? `<tr class="total">
-            <td>Sum of days</td>
+            <td>${month ? "Sum of months" : "Sum of days"}</td>
             <td>${tot.buy_s || "—"}</td>
             <td>${tot.sell_s || "—"}</td>
             <td class="${tot.net_cls || ""}">${tot.net_s || "—"}</td>
@@ -317,10 +319,10 @@ function renderFlowDaily(data) {
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th>Date</th><th>Buy</th><th>Sell</th><th>Net</th></tr>
+                <tr><th>${month ? "Month" : "Date"}</th><th>Buy</th><th>Sell</th><th>Net</th></tr>
               </thead>
               <tbody>
-                ${rows || `<tr><td colspan="4">No daily rows stored for this month.</td></tr>`}
+                ${rows || `<tr><td colspan="4">${month ? "No monthly rows stored." : "No daily rows stored for this month."}</td></tr>`}
                 ${foot}
               </tbody>
             </table>
@@ -363,8 +365,18 @@ async function loadSector() {
     <h2><span class="${lastTrailClass(data.trail_steps)}">${scoreLabel}</span> — ${data.mark || ""} ${score.signal || ""}</h2>
     ${data.trail_steps && data.trail_steps.length ? `<p class="trail">${renderTrail(data.trail_steps)}</p>` : ""}
     <div class="chips sector-chips">
-      <article><span>FPI/FII</span><strong>${data.fpi_s}</strong><em>${data.fpi_via ? `NSDL reports this under ${data.fpi_via}` : (data.fpi_trail_s || "NSDL sector equity")}</em></article>
-      <article><span>DII/MF</span><strong>${data.dii_word}</strong><em>AMFI monthly note · market-wide</em></article>
+      <article>
+        <span>FPI/FII</span>
+        <strong class="${data.fpi_cls || ""}">${data.fpi_s}</strong>
+        ${!data.fpi_via && data.fpi_trail_steps && data.fpi_trail_steps.length ? `<div class="trail">${renderTrail(data.fpi_trail_steps)}</div>` : ""}
+        <em>${data.fpi_via ? `NSDL reports this under ${data.fpi_via}` : "NSDL sector equity · last four months"}</em>
+      </article>
+      <article>
+        <span>DII net</span>
+        <strong class="${data.dii_cls || ""}">${data.dii_s || data.dii_word || "—"}</strong>
+        ${data.dii_trail_steps && data.dii_trail_steps.length ? `<div class="trail">${renderTrail(data.dii_trail_steps)}</div>` : ""}
+        <em>AMFI monthly note · market-wide, not this sector</em>
+      </article>
       <article><span>1M Return</span><strong>${data.ret_1m}</strong><em>vs own index</em></article>
       <article><span>Relative Strength</span><strong>${data.rs}</strong><em>vs NIFTY 500</em></article>
       ${symbolChip}
@@ -477,31 +489,37 @@ function bindTableSort(defaultKey) {
   });
 }
 
+
+let exitChartFullscreen = function () {};
+
 function renderFlowChart(data) {
-  const canvas = document.getElementById("flow-chart");
+  const heatEl = document.getElementById("flow-heat");
+  const hoverEl = document.getElementById("chart-hover");
+  const heatTitle = document.getElementById("heat-title");
   const splitCanvas = document.getElementById("split-chart");
   const splitCard = document.getElementById("split-card");
   const splitTitle = document.getElementById("split-title");
-  const legend = document.getElementById("chart-legend");
-  const tooltipEl = document.getElementById("chart-tooltip");
+  const marketCanvas = document.getElementById("market-flow-chart");
+  const marketCard = document.getElementById("market-flow-card");
+  const marketTitle = document.getElementById("market-flow-title");
+  const marketSortBar = document.getElementById("market-sort");
   const modeBar = document.getElementById("chart-mode");
-  if (!data || !canvas || !legend || !modeBar || typeof Chart === "undefined") return;
+  const sortBar = document.getElementById("chart-sort");
+  const dirBtn = document.getElementById("chart-dir");
+  const searchEl = document.getElementById("chart-search");
+  if (!data || !heatEl || !modeBar) return;
 
-  const PALETTE = [
-    "#123c2f", "#c45c26", "#1d4e89", "#0f7b4a", "#9b1c1c",
-    "#6b4c9a", "#b08900", "#0e7490", "#9f1239", "#365314",
-    "#7c2d12", "#1e3a8a", "#115e59", "#a16207", "#4c1d95",
-    "#9a3412", "#166534", "#be185d", "#075985", "#44403c",
-    "#854d0e", "#334155", "#047857",
-  ];
-  const hidden = new Set();
   let view = "fpi";
-  let lineChart = null;
+  let sortMode = "latest";
+  let sortCol = -1;
+  let sortDir = "desc";
+  let marketSort = "time";
+  let marketDir = "asc";
   let barChart = null;
-  let currentUnit = "₹ Cr";
+  let marketChart = null;
 
-  function color(i) {
-    return PALETTE[i % PALETTE.length];
+  function hasVals(arr) {
+    return Array.isArray(arr) && arr.some((v) => v != null && !Number.isNaN(Number(v)));
   }
 
   function pack() {
@@ -511,8 +529,9 @@ function renderFlowChart(data) {
         keys: data.weekly.keys,
         series: data.weekly.returns,
         unit: "%",
-        yTitle: "Weekly return",
         selected: null,
+        dense: true,
+        title: "Weekly index return",
       };
     }
     if (view === "score") {
@@ -521,8 +540,9 @@ function renderFlowChart(data) {
         keys: data.monthly.keys,
         series: data.monthly.score,
         unit: "score",
-        yTitle: "Money-flow score",
         selected: data.selected,
+        dense: false,
+        title: "Monthly score",
       };
     }
     return {
@@ -530,8 +550,9 @@ function renderFlowChart(data) {
       keys: data.monthly.keys,
       series: data.monthly.fpi,
       unit: "₹ Cr",
-      yTitle: "FPI net (₹ Cr)",
       selected: data.selected,
+      dense: false,
+      title: "Monthly FPI",
     };
   }
 
@@ -546,139 +567,176 @@ function renderFlowChart(data) {
     return String(Math.round(n * 10) / 10);
   }
 
-  function lastAbs(series) {
+  function compact(v, unit) {
+    if (v == null || Number.isNaN(Number(v))) return "";
+    const n = Number(v);
+    if (unit === "₹ Cr") {
+      const abs = Math.abs(n);
+      if (abs >= 1000) return `${n > 0 ? "+" : "-"}${(abs / 1000).toFixed(1)}k`;
+      return `${n > 0 ? "+" : ""}${Math.round(n)}`;
+    }
+    if (unit === "%") return `${n > 0 ? "+" : ""}${n.toFixed(1)}`;
+    return String(Math.round(n));
+  }
+
+  function mixRgbSafe(t, from, to) {
+    const u = Math.max(0, Math.min(1, t));
+    const ch = (i) => Math.round(from[i] + (to[i] - from[i]) * u);
+    return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`;
+  }
+
+  function scaleOf(series, unit) {
+    const vals = series
+      .flatMap((s) => s.values)
+      .filter((v) => v != null && !Number.isNaN(Number(v)))
+      .map((v) => Math.abs(Number(v)))
+      .sort((a, b) => a - b);
+    if (!vals.length) return 1;
+    const p90 = vals[Math.min(vals.length - 1, Math.floor(vals.length * 0.9))];
+    if (unit === "score") return 30;
+    return Math.max(p90 || 1, unit === "%" ? 2 : 1);
+  }
+
+  function cellFill(v, scale, unit) {
+    if (v == null || Number.isNaN(Number(v))) return "#efe8da";
+    const n = Number(v);
+    const t = unit === "score"
+      ? Math.max(-1, Math.min(1, (n - 50) / scale))
+      : Math.max(-1, Math.min(1, n / scale));
+    if (t >= 0) return mixRgbSafe(t, [255, 253, 248], [15, 123, 74]);
+    return mixRgbSafe(-t, [255, 253, 248], [155, 28, 28]);
+  }
+
+  function inkFor(v, scale, unit) {
+    if (v == null || Number.isNaN(Number(v))) return "#5c574e";
+    const n = Number(v);
+    const t = unit === "score"
+      ? Math.abs((n - 50) / scale)
+      : Math.abs(n / scale);
+    return t > 0.55 ? "#fffdf8" : "#1b1916";
+  }
+
+  function lastVal(series) {
     for (let i = series.values.length - 1; i >= 0; i -= 1) {
       const v = series.values[i];
-      if (v != null && !Number.isNaN(Number(v))) return Math.abs(Number(v));
+      if (v != null && !Number.isNaN(Number(v))) return Number(v);
     }
-    return 0;
+    return null;
   }
 
-  function defaultHidden(series) {
-    hidden.clear();
-    const ranked = series.slice().sort((a, b) => lastAbs(b) - lastAbs(a));
-    ranked.slice(8).forEach((s) => hidden.add(s.name));
+  function valAt(row, col) {
+    if (col == null || col < 0) return lastVal(row);
+    const v = row.values[col];
+    if (v == null || Number.isNaN(Number(v))) return null;
+    return Number(v);
   }
 
-  function yTick(v, unit) {
-    if (unit === "₹ Cr") return Math.round(v).toLocaleString("en-IN");
-    if (unit === "%") return `${v.toFixed(1)}%`;
-    return String(Math.round(v));
+  function sortColIndex(packed) {
+    if (sortMode === "name") return -2;
+    if (sortMode === "selected") return packed.keys.indexOf(data.selected);
+    if (sortMode === "col") return sortCol;
+    return -1;
   }
 
-  function paintLegend(series) {
-    legend.replaceChildren();
-    series.forEach((s, i) => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.dataset.name = s.name;
-      b.className = hidden.has(s.name) ? "off" : "on";
-      const dot = document.createElement("i");
-      dot.style.background = color(i);
-      b.append(dot, s.name);
-      legend.append(b);
+  function sortedRows(packed) {
+    const q = (searchEl && searchEl.value.trim().toLowerCase()) || "";
+    const rows = packed.series
+      .map((s) => ({ ...s }))
+      .filter((s) => !q || s.name.toLowerCase().includes(q));
+    const col = sortColIndex(packed);
+    rows.sort((a, b) => {
+      if (sortMode === "name" || col === -2) {
+        const d = a.name.localeCompare(b.name);
+        return sortDir === "asc" ? d : -d;
+      }
+      const va = valAt(a, col);
+      const vb = valAt(b, col);
+      if (va == null && vb == null) return a.name.localeCompare(b.name);
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      const d = va - vb;
+      return sortDir === "asc" ? d : -d;
     });
+    return rows;
   }
 
-  function tooltipHandler(context) {
-    const tooltip = context.tooltip;
-    if (!tooltipEl) return;
-    if (!tooltip || tooltip.opacity === 0) {
-      tooltipEl.classList.add("hidden");
-      return;
+  function dirLabel() {
+    if (sortMode === "name") return sortDir === "asc" ? "A → Z" : "Z → A";
+    return sortDir === "desc" ? "High → low" : "Low → high";
+  }
+
+  function syncSortButtons() {
+    if (sortBar) {
+      sortBar.querySelectorAll("button[data-sort]").forEach((b) => {
+        b.classList.toggle("on", b.dataset.sort === sortMode);
+      });
     }
-    const points = (tooltip.dataPoints || [])
-      .filter((p) => p.parsed && p.parsed.y != null && !Number.isNaN(p.parsed.y))
-      .sort((a, b) => b.parsed.y - a.parsed.y);
-    if (!points.length) {
-      tooltipEl.classList.add("hidden");
-      return;
+    if (dirBtn) {
+      dirBtn.dataset.dir = sortDir;
+      dirBtn.textContent = dirLabel();
     }
-    const title = tooltip.title && tooltip.title.length ? tooltip.title[0] : "";
-    const rows = points
-      .map((p) => {
-        const n = p.parsed.y;
-        const cls = n > 0 ? "up" : n < 0 ? "down" : "";
-        return `<li><span class="swatch" style="background:${p.dataset.borderColor}"></span><span class="n">${p.dataset.label}</span><span class="v ${cls}">${fmt(n, currentUnit)}</span></li>`;
+  }
+
+  function greenHint(unit) {
+    if (unit === "score") return "score above 50";
+    if (unit === "%") return "positive return";
+    return "FPI inflow";
+  }
+
+  function paintHeat() {
+    const packed = pack();
+    const rows = sortedRows(packed);
+    const scale = scaleOf(packed.series, packed.unit);
+    const selectedKey = packed.selected;
+    const selIdx = selectedKey ? packed.keys.indexOf(selectedKey) : -1;
+    const col = sortColIndex(packed);
+    if (heatTitle) heatTitle.textContent = `Sector heatmap · ${packed.title}`;
+    const head = packed.labels
+      .map((lab, i) => {
+        const on = i === selIdx ? " on" : "";
+        const sort = i === col ? ` sort ${sortDir}` : "";
+        return `<th class="sortable${on}${sort}" data-col="${i}" title="Sort by ${lab}">${lab}</th>`;
       })
       .join("");
-    tooltipEl.innerHTML = `<strong>${title}</strong><ul>${rows}</ul>`;
-    tooltipEl.classList.remove("hidden");
-    const wrap = tooltipEl.parentElement;
-    const pad = 12;
-    const tw = tooltipEl.offsetWidth;
-    const th = tooltipEl.offsetHeight;
-    let left = tooltip.caretX + pad;
-    let top = tooltip.caretY + pad;
-    if (left + tw > wrap.clientWidth - 8) left = tooltip.caretX - tw - pad;
-    if (top + th > wrap.clientHeight - 8) top = tooltip.caretY - th - pad;
-    tooltipEl.style.left = `${Math.max(8, left)}px`;
-    tooltipEl.style.top = `${Math.max(8, top)}px`;
-  }
-
-  function lineConfig(packed) {
-    currentUnit = packed.unit;
-    return {
-      type: "line",
-      data: {
-        labels: packed.labels,
-        datasets: packed.series.map((s, i) => ({
-          label: s.name,
-          data: s.values.map((v) => (v == null || Number.isNaN(Number(v)) ? null : Number(v))),
-          borderColor: color(i),
-          backgroundColor: color(i),
-          borderWidth: 2.25,
-          pointRadius: packed.labels.length > 18 ? 2.5 : 4,
-          pointHoverRadius: 7,
-          pointHitRadius: 10,
-          tension: 0.2,
-          spanGaps: false,
-          hidden: hidden.has(s.name),
-        })),
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            enabled: false,
-            external: tooltipHandler,
-          },
-        },
-        scales: {
-          x: {
-            ticks: { maxRotation: 0, autoSkip: true, color: "#5c574e", font: { size: 11 } },
-            grid: { color: "#efe8da" },
-          },
-          y: {
-            title: { display: true, text: packed.yTitle, color: "#5c574e", font: { size: 12 } },
-            ticks: {
-              color: "#5c574e",
-              font: { size: 11 },
-              callback: (v) => yTick(v, packed.unit),
-            },
-            grid: { color: "#efe8da" },
-          },
-        },
-      },
-    };
+    const nameSort = sortMode === "name" ? ` sort ${sortDir}` : "";
+    const body = rows
+      .map((row) => {
+        const cells = row.values
+          .map((v, i) => {
+            const title = `${row.name} · ${packed.labels[i]}: ${fmt(v, packed.unit)}`;
+            const text = packed.dense ? "" : compact(v, packed.unit);
+            const on = i === selIdx ? " on" : "";
+            const sort = i === col ? " sort" : "";
+            return `<td class="${on}${sort}">
+              <span class="flow-cell${packed.dense ? " tight" : ""}" style="background:${cellFill(v, scale, packed.unit)};color:${inkFor(v, scale, packed.unit)}" title="${title.replace(/"/g, "&quot;")}" data-tip="${title.replace(/"/g, "&quot;")}">${text}</span>
+            </td>`;
+          })
+          .join("");
+        return `<tr><th scope="row">${row.name}</th>${cells}</tr>`;
+      })
+      .join("");
+    heatEl.innerHTML = `
+      <table class="flow-heat${packed.dense ? " dense" : ""}">
+        <thead><tr><th class="sortable${nameSort}" data-col="name">Sector</th>${head}</tr></thead>
+        <tbody>${body || `<tr><td colspan="${packed.labels.length + 1}">No sectors match.</td></tr>`}</tbody>
+      </table>`;
+    if (hoverEl) {
+      hoverEl.textContent = `${rows.length} of ${packed.series.length} sectors · click a column to sort · green = ${greenHint(packed.unit)}`;
+    }
   }
 
   function renderSplit(packed) {
-    if (!splitCanvas || !splitCard) return;
+    if (!splitCanvas || !splitCard || typeof Chart === "undefined") return;
     const show = view === "fpi";
     splitCard.classList.toggle("hidden", !show);
     if (!show) return;
     const idx = packed.keys.indexOf(data.selected);
     const at = idx >= 0 ? idx : packed.keys.length - 1;
-    const rows = packed.series
+    const rows = sortedRows(packed)
       .map((s) => ({ name: s.name, val: s.values[at] }))
-      .filter((r) => r.val != null && !Number.isNaN(Number(r.val)))
-      .sort((a, b) => b.val - a.val);
+      .filter((r) => r.val != null && !Number.isNaN(Number(r.val)));
     if (splitTitle) {
-      splitTitle.textContent = `${packed.labels[at] || ""} FPI split · hover a bar for the exact figure`;
+      splitTitle.textContent = `${packed.labels[at] || ""} FPI split · all sectors`;
     }
     const cfg = {
       type: "bar",
@@ -718,51 +776,250 @@ function renderFlowChart(data) {
     };
     if (barChart) barChart.destroy();
     barChart = new Chart(splitCanvas, cfg);
+    const wrap = splitCard.querySelector(".chart-canvas-wrap");
+    if (wrap && !splitCard.classList.contains("is-fs")) {
+      wrap.style.height = `${Math.max(280, rows.length * 22 + 48)}px`;
+    }
+  }
+
+  function marketOrder() {
+    const n = (data.monthly.keys || []).length;
+    const idx = Array.from({ length: n }, (_, i) => i);
+    const series = {
+      fpi: (data.market && data.market.fpi) || [],
+      dii: (data.market && data.market.dii) || [],
+      fii: (data.market && data.market.fii_cash) || [],
+    };
+    if (marketSort === "time") {
+      if (marketDir === "desc") idx.reverse();
+      return idx;
+    }
+    const vals = series[marketSort] || [];
+    idx.sort((a, b) => {
+      const va = vals[a];
+      const vb = vals[b];
+      const na = va == null || Number.isNaN(Number(va)) ? null : Number(va);
+      const nb = vb == null || Number.isNaN(Number(vb)) ? null : Number(vb);
+      if (na == null && nb == null) return 0;
+      if (na == null) return 1;
+      if (nb == null) return -1;
+      return marketDir === "asc" ? na - nb : nb - na;
+    });
+    return idx;
+  }
+
+  function resizeCharts() {
+    if (marketChart) marketChart.resize();
+    if (barChart) barChart.resize();
+  }
+
+  function renderMarket() {
+    if (!marketCanvas || !marketCard || typeof Chart === "undefined") return;
+    const market = data.market || {};
+    const labels = data.monthly.labels || [];
+    const showFpi = hasVals(market.fpi);
+    const showDii = hasVals(market.dii);
+    const showFii = hasVals(market.fii_cash);
+    const show = showFpi || showDii || showFii;
+    marketCard.classList.toggle("hidden", !show);
+    if (marketSortBar) {
+      const fiiBtn = marketSortBar.querySelector("[data-msort='fii']");
+      if (fiiBtn) fiiBtn.classList.toggle("hidden", !showFii);
+      marketSortBar.querySelectorAll("button[data-msort]").forEach((b) => {
+        b.classList.toggle("on", b.dataset.msort === marketSort);
+      });
+    }
+    if (!show) return;
+    const order = marketOrder();
+    const pick = (arr) => order.map((i) => (arr && arr[i] != null ? arr[i] : null));
+    const orderedLabels = order.map((i) => labels[i]);
+    const datasets = [];
+    if (showFpi) {
+      datasets.push({
+        label: "NSDL FPI",
+        data: pick(market.fpi),
+        backgroundColor: "#123c2f",
+        borderWidth: 0,
+      });
+    }
+    if (showDii) {
+      datasets.push({
+        label: "AMFI DII",
+        data: pick(market.dii),
+        backgroundColor: "#c45c26",
+        borderWidth: 0,
+      });
+    }
+    if (showFii) {
+      datasets.push({
+        label: "NSE FII cash",
+        data: pick(market.fii_cash),
+        backgroundColor: "#1d4e89",
+        borderWidth: 0,
+      });
+    }
+    if (marketTitle) {
+      marketTitle.textContent = "Market monthly · FPI vs DII";
+    }
+    if (marketChart) marketChart.destroy();
+    marketChart = new Chart(marketCanvas, {
+      type: "bar",
+      data: { labels: orderedLabels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: "top", labels: { color: "#5c574e", boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              label: (item) => ` ${item.dataset.label}: ${fmt(item.parsed.y, "₹ Cr")}`,
+            },
+          },
+        },
+        scales: {
+          x: { ticks: { color: "#5c574e", maxRotation: 45, minRotation: 0 }, grid: { display: false } },
+          y: {
+            title: { display: true, text: "₹ Cr", color: "#5c574e" },
+            ticks: { callback: (v) => Math.round(v).toLocaleString("en-IN"), color: "#5c574e" },
+            grid: { color: "#efe8da" },
+          },
+        },
+      },
+    });
+  }
+
+  function bindFullscreen() {
+    const buttons = document.querySelectorAll(".chart-fs-btn[data-fs]");
+    function exit() {
+      document.querySelectorAll(".chart-card.is-fs").forEach((c) => c.classList.remove("is-fs"));
+      document.body.classList.remove("chart-fs-open");
+      buttons.forEach((b) => {
+        b.textContent = "Full screen";
+      });
+      requestAnimationFrame(resizeCharts);
+    }
+    exitChartFullscreen = exit;
+    buttons.forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", () => {
+        const card = document.getElementById(btn.dataset.fs);
+        if (!card) return;
+        const open = card.classList.contains("is-fs");
+        exit();
+        if (!open) {
+          card.classList.add("is-fs");
+          document.body.classList.add("chart-fs-open");
+          btn.textContent = "Exit";
+          requestAnimationFrame(resizeCharts);
+        }
+      });
+    });
   }
 
   function render() {
     const packed = pack();
-    paintLegend(packed.series);
-    if (lineChart) lineChart.destroy();
-    lineChart = new Chart(canvas, lineConfig(packed));
+    syncSortButtons();
+    paintHeat();
     renderSplit(packed);
   }
 
-  defaultHidden(pack().series);
-  render();
-
-  legend.addEventListener("click", (ev) => {
-    const btnEl = ev.target.closest("button[data-name]");
-    if (!btnEl || !lineChart) return;
-    const name = btnEl.dataset.name;
-    if (hidden.has(name)) hidden.delete(name);
-    else hidden.add(name);
-    pack().series.forEach((s, i) => {
-      lineChart.setDatasetVisibility(i, !hidden.has(s.name));
+  if (!heatEl.dataset.bound) {
+    heatEl.dataset.bound = "1";
+    heatEl.addEventListener("mouseover", (ev) => {
+      const cell = ev.target.closest("[data-tip]");
+      if (hoverEl && cell) hoverEl.textContent = cell.dataset.tip;
     });
-    lineChart.update();
-    paintLegend(pack().series);
-  });
+    heatEl.addEventListener("mouseout", (ev) => {
+      if (ev.target.closest("[data-tip]") && hoverEl) {
+        const packed = pack();
+        const rows = sortedRows(packed);
+        hoverEl.textContent = `${rows.length} of ${packed.series.length} sectors · click a column to sort · green = ${greenHint(packed.unit)}`;
+      }
+    });
+    heatEl.addEventListener("click", (ev) => {
+      const th = ev.target.closest("thead th[data-col]");
+      if (!th) return;
+      const col = th.dataset.col;
+      if (col === "name") {
+        if (sortMode === "name") sortDir = sortDir === "asc" ? "desc" : "asc";
+        else {
+          sortMode = "name";
+          sortDir = "asc";
+        }
+      } else {
+        const i = Number(col);
+        if (sortMode === "col" && sortCol === i) sortDir = sortDir === "desc" ? "asc" : "desc";
+        else {
+          sortMode = "col";
+          sortCol = i;
+          sortDir = "desc";
+        }
+      }
+      render();
+    });
+  }
 
-  modeBar.addEventListener("click", (ev) => {
-    const btnEl = ev.target.closest("button");
-    if (!btnEl) return;
-    if (btnEl.dataset.view) {
+  if (searchEl && !searchEl.dataset.bound) {
+    searchEl.dataset.bound = "1";
+    searchEl.addEventListener("input", render);
+  }
+
+  if (!modeBar.dataset.bound) {
+    modeBar.dataset.bound = "1";
+    modeBar.addEventListener("click", (ev) => {
+      const btnEl = ev.target.closest("button[data-view]");
+      if (!btnEl) return;
       view = btnEl.dataset.view;
-      defaultHidden(pack().series);
       modeBar.querySelectorAll("button[data-view]").forEach((b) => b.classList.toggle("on", b === btnEl));
       render();
-      return;
-    }
-    if (btnEl.dataset.action === "all") {
-      hidden.clear();
+    });
+  }
+
+  if (sortBar && !sortBar.dataset.bound) {
+    sortBar.dataset.bound = "1";
+    sortBar.addEventListener("click", (ev) => {
+      const btnEl = ev.target.closest("button[data-sort]");
+      if (!btnEl) return;
+      const next = btnEl.dataset.sort;
+      if (sortMode === next) {
+        sortDir = sortDir === "desc" ? "asc" : "desc";
+      } else {
+        sortMode = next;
+        sortCol = -1;
+        sortDir = next === "name" ? "asc" : "desc";
+      }
       render();
-    }
-    if (btnEl.dataset.action === "none") {
-      pack().series.forEach((s) => hidden.add(s.name));
+    });
+  }
+
+  if (dirBtn && !dirBtn.dataset.bound) {
+    dirBtn.dataset.bound = "1";
+    dirBtn.addEventListener("click", () => {
+      sortDir = sortDir === "desc" ? "asc" : "desc";
       render();
-    }
-  });
+    });
+  }
+
+  if (marketSortBar && !marketSortBar.dataset.bound) {
+    marketSortBar.dataset.bound = "1";
+    marketSortBar.addEventListener("click", (ev) => {
+      const btnEl = ev.target.closest("button[data-msort]");
+      if (!btnEl) return;
+      const next = btnEl.dataset.msort;
+      if (marketSort === next) {
+        marketDir = marketDir === "desc" ? "asc" : "desc";
+      } else {
+        marketSort = next;
+        marketDir = next === "time" ? "asc" : "desc";
+      }
+      renderMarket();
+    });
+  }
+
+  bindFullscreen();
+  renderMarket();
+  render();
 }
 
 if (document.body.dataset.page === "home") {
@@ -776,7 +1033,12 @@ if (document.body.dataset.page === "home") {
     if (closer) closer.addEventListener("click", closeFlowDaily);
   }
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") closeFlowDaily();
+    if (ev.key !== "Escape") return;
+    if (document.body.classList.contains("chart-fs-open")) {
+      exitChartFullscreen();
+      return;
+    }
+    closeFlowDaily();
   });
 } else if (document.body.dataset.page === "sector") {
   loadSector();
