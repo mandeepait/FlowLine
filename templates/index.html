@@ -4,13 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name }} · Money Flow & Sector Rotation</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=api14">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=api27">
 </head>
-<body data-page="home">
+<body data-page="home" class="is-loading">
   <div id="page-loader" class="page-loader" aria-live="polite" aria-busy="true">
     <div class="page-loader-inner">
       <span class="page-loader-spin" aria-hidden="true"></span>
-      <p>Loading market data</p>
+      <p id="page-loader-title">Loading market data</p>
+      <p class="page-loader-note">Please wait. Do not click or close this page.</p>
+      <ol id="page-loader-steps" class="page-loader-steps"></ol>
     </div>
   </div>
   <header class="top">
@@ -18,7 +20,13 @@
       <p class="kicker">{{ app_name }} · Indian cash market · official sources</p>
       <h1>{{ app_tagline }}</h1>
     </div>
-    <button id="update-btn" type="button">🔄 Update Market Data</button>
+    <div class="top-actions">
+      <nav class="page-nav" aria-label="Pages">
+        <a href="/" class="on">Market</a>
+        <a href="/deals">Large Deals</a>
+      </nav>
+      <button id="update-btn" type="button">🔄 Update Market Data</button>
+    </div>
   </header>
 
   <div id="progress" class="progress hidden"></div>
@@ -45,25 +53,56 @@
     <section class="chart-section tab-panel" id="charts" data-api="chart">
       <div class="panel-body hidden">
         <h3>Sector flow over time</h3>
-        <p class="hint">Monthly FPI is NSDL sector equity net (₹ Cr). Weekly is the sector index return from week-end closes — official weekly sector FPI is not published. Click a name to show or hide a line.</p>
+        <p class="hint">Market bars are official month totals: NSDL FPI, AMFI DII, and NSE FII cash (cash-tape days only, can be partial). The heatmap is NSDL industry FPI — AMFI does not publish DII by sector. Click a column to sort. Green is inflow / strength, red is outflow / weakness.</p>
         <div class="sort-bar" id="chart-mode">
           <span>View</span>
           <button type="button" data-view="fpi" class="on">Monthly FPI</button>
           <button type="button" data-view="score">Monthly score</button>
           <button type="button" data-view="weekly">Weekly index</button>
-          <button type="button" data-action="all">All sectors</button>
-          <button type="button" data-action="none">Hide all</button>
+        </div>
+        <div class="chart-toolbar">
+          <div class="sort-bar" id="chart-sort">
+            <span>Sort</span>
+            <button type="button" data-sort="latest" class="on">Latest</button>
+            <button type="button" data-sort="selected">Selected month</button>
+            <button type="button" data-sort="name">Name</button>
+            <button type="button" data-dir="desc" id="chart-dir">High → low</button>
+          </div>
+          <label class="chart-filter">Filter sectors <input id="chart-search" type="search" placeholder="Financial, IT, Auto…"></label>
         </div>
         <div class="chart-stack">
-          <div class="chart-card">
-            <div class="chart-canvas-wrap">
-              <canvas id="flow-chart" height="460"></canvas>
-              <div id="chart-tooltip" class="chart-tooltip hidden"></div>
+          <div class="chart-card" id="market-flow-card">
+            <div class="chart-card-head">
+              <h4 id="market-flow-title">Market monthly · FPI vs DII</h4>
+              <div class="chart-card-actions">
+                <div class="sort-bar compact" id="market-sort">
+                  <span>Sort</span>
+                  <button type="button" data-msort="time" class="on">Time</button>
+                  <button type="button" data-msort="fpi">FPI</button>
+                  <button type="button" data-msort="dii">DII</button>
+                  <button type="button" data-msort="fii">FII cash</button>
+                </div>
+                <button type="button" class="chart-fs-btn" data-fs="market-flow-card">Full screen</button>
+              </div>
             </div>
-            <div id="chart-legend" class="chart-legend"></div>
+            <p class="hint">Click a sort to reorder months. Time is oldest → newest; FPI / DII / FII cash sort by that series. NSE FII cash is hidden when no monthly rollup is stored.</p>
+            <div class="chart-canvas-wrap market-flow">
+              <canvas id="market-flow-chart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card" id="heat-card">
+            <div class="chart-card-head">
+              <h4 id="heat-title">Sector heatmap</h4>
+              <button type="button" class="chart-fs-btn" data-fs="heat-card">Full screen</button>
+            </div>
+            <div id="flow-heat" class="flow-heat-wrap"></div>
+            <p id="chart-hover" class="chart-hover hint"></p>
           </div>
           <div class="chart-card" id="split-card">
-            <h4 id="split-title">FPI split</h4>
+            <div class="chart-card-head">
+              <h4 id="split-title">FPI split</h4>
+              <button type="button" class="chart-fs-btn" data-fs="split-card">Full screen</button>
+            </div>
             <div class="chart-canvas-wrap bar">
               <canvas id="split-chart"></canvas>
             </div>
@@ -97,6 +136,6 @@
     </div>
   </div>
   <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='app.js') }}?v=api14"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=api27"></script>
 </body>
 </html>
