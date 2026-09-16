@@ -3,37 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sector · {{ app_name }}</title>
+  <title>{{ company }} · Large Deals · {{ app_name }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=api27">
 </head>
-<body data-page="sector" class="is-loading" data-slug="{{ slug }}">
+<body data-page="deal-stock" class="is-loading" data-symbol="{{ symbol }}">
   <div id="page-loader" class="page-loader" aria-live="polite" aria-busy="true">
     <div class="page-loader-inner">
       <span class="page-loader-spin" aria-hidden="true"></span>
-      <p id="page-loader-title">Loading sector</p>
+      <p id="page-loader-title">Loading stock deals</p>
       <p class="page-loader-note">Please wait. Do not click or close this page.</p>
       <ol id="page-loader-steps" class="page-loader-steps"></ol>
     </div>
   </div>
   <header class="top">
     <div>
-      <p class="kicker"><a id="back-link" href="/">← {{ app_name }}</a> · sector</p>
-      <h1 id="sector-title">Loading…</h1>
+      <p class="kicker"><a href="/deals">← Large Deals</a> · official NSE + BSE</p>
+      <h1 id="deal-stock-title">{{ company }}</h1>
     </div>
     <nav class="page-nav" aria-label="Pages">
       <a href="/">Market</a>
-      <a href="/deals">Large Deals</a>
+      <a href="/deals" class="on">Large Deals</a>
     </nav>
   </header>
 
-  <div class="sticky-bar hidden" id="sector-bar">
-    <nav class="months" id="months" aria-label="Month"></nav>
-  </div>
-
-  <section class="hero" id="sector-hero" data-api="sector">
-    <div class="panel-body"></div>
+  <section class="hero" id="deal-stock-page">
+    <div class="panel-body" id="deal-stock-body"></div>
   </section>
 
+  <footer>
+    {{ app_name }} · Every stored official buy and sell print for this stock.
+  </footer>
   <script src="{{ url_for('static', filename='app.js') }}?v=api27"></script>
 </body>
 </html>

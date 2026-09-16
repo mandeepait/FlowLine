@@ -4,13 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ app_name }} · Money Flow & Sector Rotation</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=api18">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=api27">
 </head>
-<body data-page="home">
+<body data-page="home" class="is-loading">
   <div id="page-loader" class="page-loader" aria-live="polite" aria-busy="true">
     <div class="page-loader-inner">
       <span class="page-loader-spin" aria-hidden="true"></span>
-      <p>Loading market data</p>
+      <p id="page-loader-title">Loading market data</p>
+      <p class="page-loader-note">Please wait. Do not click or close this page.</p>
+      <ol id="page-loader-steps" class="page-loader-steps"></ol>
     </div>
   </div>
   <header class="top">
@@ -18,7 +20,13 @@
       <p class="kicker">{{ app_name }} · Indian cash market · official sources</p>
       <h1>{{ app_tagline }}</h1>
     </div>
-    <button id="update-btn" type="button">🔄 Update Market Data</button>
+    <div class="top-actions">
+      <nav class="page-nav" aria-label="Pages">
+        <a href="/" class="on">Market</a>
+        <a href="/deals">Large Deals</a>
+      </nav>
+      <button id="update-btn" type="button">🔄 Update Market Data</button>
+    </div>
   </header>
 
   <div id="progress" class="progress hidden"></div>
@@ -128,6 +136,6 @@
     </div>
   </div>
   <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-  <script src="{{ url_for('static', filename='app.js') }}?v=api18"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=api27"></script>
 </body>
 </html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Large Deals · {{ app_name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=api27">
+</head>
+<body data-page="deals" class="is-loading">
+  <div id="page-loader" class="page-loader" aria-live="polite" aria-busy="true">
+    <div class="page-loader-inner">
+      <span class="page-loader-spin" aria-hidden="true"></span>
+      <p id="page-loader-title">Loading large deals</p>
+      <p class="page-loader-note">Please wait. Do not click or close this page.</p>
+      <ol id="page-loader-steps" class="page-loader-steps"></ol>
+    </div>
+  </div>
+  <header class="top">
+    <div>
+      <p class="kicker"><a href="/">← {{ app_name }}</a> · official NSE + BSE</p>
+      <h1>Large Deals</h1>
+    </div>
+    <nav class="page-nav" aria-label="Pages">
+      <a href="/">Market</a>
+      <a href="/deals" class="on">Large Deals</a>
+    </nav>
+  </header>
+
+  <section id="deals" class="hero">
+    <div class="panel-body">
+      <div class="deal-periods" role="group" aria-label="Period">
+        <button type="button" data-period="7">7 days</button>
+        <button type="button" data-period="30">30 days</button>
+        <button type="button" data-period="90">90 days</button>
+        <button type="button" data-period="6m" class="on">6 months</button>
+      </div>
+      <div class="deal-toolbar">
+        <label>From <input type="date" id="deal-from"></label>
+        <label>To <input type="date" id="deal-to"></label>
+        <label>Exchange
+          <select id="deal-exchange">
+            <option value="ALL">All</option>
+            <option value="NSE">NSE</option>
+            <option value="BSE">BSE</option>
+          </select>
+        </label>
+        <label>Deal type
+          <select id="deal-type">
+            <option value="ALL">All</option>
+            <option value="BULK">Bulk</option>
+            <option value="BLOCK">Block</option>
+            <option value="SHORT_SELLING">Short Selling</option>
+          </select>
+        </label>
+        <label>Side
+          <select id="deal-side">
+            <option value="ALL">Buy + Sell</option>
+            <option value="BUY">Buy</option>
+            <option value="SELL">Sell</option>
+          </select>
+        </label>
+        <label>Stock
+          <input type="search" id="deal-search" placeholder="Name or symbol" autocomplete="off">
+        </label>
+        <button type="button" id="deal-refresh">Refresh</button>
+        <button type="button" id="deal-fetch-today">Fetch Today</button>
+        <button type="button" id="deal-fetch-hist">Fetch this range</button>
+      </div>
+      <div id="deal-last" class="deal-last hint"></div>
+      <div class="chips deal-chips" id="deal-cards"></div>
+      <h4 class="deal-sub">Stocks</h4>
+      <p class="hint" id="deal-session-hint">Last 6 months of stored official prints. Open a stock for its full timeline.</p>
+      <div id="deal-stock-strip" class="deal-stock-strip"></div>
+      <div class="table-wrap" id="deal-score-wrap"></div>
+      <div id="deal-fetch-status" class="deal-fetch hidden" aria-live="polite"></div>
+
+      <h4 class="deal-sub">Buy / sell timeline</h4>
+      <p class="hint">Every stored date in this range. Click a date to focus that session, or pick 6 months to return.</p>
+      <div id="deal-timeline" class="deal-timeline"></div>
+
+      <h4 class="deal-sub">Sector deal activity</h4>
+      <div class="table-wrap" id="deal-sector-wrap"></div>
+      <h4 class="deal-sub">Deals</h4>
+      <div class="table-wrap" id="deal-table-wrap"></div>
+      <div class="deal-pager" id="deal-pager"></div>
+    </div>
+  </section>
+
+  <footer>
+    {{ app_name }} · Overview defaults to the last 6 months of official NSE + BSE prints.
+  </footer>
+  <script src="{{ url_for('static', filename='app.js') }}?v=api27"></script>
+</body>
+</html>

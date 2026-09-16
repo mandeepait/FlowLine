@@ -5,6 +5,16 @@ import requests
 from config import UA
 
 
+def _retry_after(resp: requests.Response, fallback: float) -> float:
+    raw = (resp.headers.get("Retry-After") or "").strip()
+    if not raw:
+        return fallback
+    try:
+        return min(60.0, max(1.0, float(raw)))
+    except ValueError:
+        return fallback
+
+
 def session() -> requests.Session:
     s = requests.Session()
     s.headers.update(
@@ -26,17 +36,19 @@ class Http:
         kwargs.setdefault("timeout", 40)
         headers = kwargs.pop("headers", {})
         last = None
+        delays = (2, 5, 15)
         for attempt in range(3):
             try:
                 r = self.s.get(url, headers=headers, **kwargs)
                 last = r
-                if r.status_code in (429, 403, 502, 503) and attempt < 2:
-                    time.sleep(1.2 * (attempt + 1))
+                if r.status_code in (429, 403, 500, 502, 503, 504) and attempt < 2:
+                    time.sleep(_retry_after(r, delays[attempt]))
                     continue
                 return r
             except requests.RequestException as exc:
                 last = exc
-                time.sleep(1.2 * (attempt + 1))
+                if attempt < 2:
+                    time.sleep(delays[attempt])
         if isinstance(last, requests.Response):
             return last
         raise last
